@@ -19,8 +19,12 @@ def find_sublist_index(main_list, sublist):
 
 
 def get_response(example, response_column, tokenizer):
-    prompt = eval(example["prompt"])[0]
-    response = eval(example[response_column])[0]
+    prompt = eval(example["prompt"])
+    response = eval(example[response_column])
+    if len(prompt) < 1 or len(response) < 1:
+        return None, None
+    prompt = prompt[0]
+    response = response[0]
     conv = [{"role": "user", "content": prompt}, {"role": "assistant", "content": response}]
     tokens = tokenizer.apply_chat_template(conv, return_attention_mask=False)
     response_tokens = tokenizer(response, return_attention_mask=False, add_special_tokens=False)['input_ids']
@@ -88,21 +92,23 @@ def main():
     fns = 0
     for i, example in enumerate(ds):
         in_seqs, out_seqs = get_response(example, "response_a", tokenizer)
-        outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
-        result = check(outputs, out_seqs, args.top_n)
-        tp, fp, tn, fn = compute_stats(result, args.threshold, example["model_a"])
-        tps += tp
-        fps += fp
-        tns += tn
-        fns += fn
+        if in_seqs is not None:
+            outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
+            result = check(outputs, out_seqs, args.top_n)
+            tp, fp, tn, fn = compute_stats(result, args.threshold, example["model_a"])
+            tps += tp
+            fps += fp
+            tns += tn
+            fns += fn
         in_seqs, out_seqs = get_response(example, "response_b", tokenizer)
-        outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
-        results = check(outputs, out_seqs, args.top_n)
-        tp, fp, tn, fn = compute_stats(result, args.threshold, example["model_b"])
-        tps += tp
-        fps += fp
-        tns += tn
-        fns += fn
+        if in_seqs is not None:
+            outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
+            results = check(outputs, out_seqs, args.top_n)
+            tp, fp, tn, fn = compute_stats(result, args.threshold, example["model_b"])
+            tps += tp
+            fps += fp
+            tns += tn
+            fns += fn
         if i % 10 == 9:
             print(i)
             print("true positive:", tps/(tps+fns))
