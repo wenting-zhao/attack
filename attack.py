@@ -144,7 +144,7 @@ def main():
             fps += fp
             tns += tn
             fns += fn
-        if i % 10 == 9:
+        if i % 100 == 99:
             print(i)
             get_stats(tps, fps, tns, fns)
     get_stats(tps, fps, tns, fns)
