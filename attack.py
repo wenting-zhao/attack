@@ -1,4 +1,5 @@
 import argparse
+import numpy as np
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
@@ -38,14 +39,34 @@ def get_response(example, response_column, tokenizer):
     out_seqs = [tokens[idx+i] for i in range(len(response_tokens))]
     return in_seqs, out_seqs
 
-def check(outputs, all_expected, num):
+def get_topk(logprob_dict, top_prob):
+    # Step 1: Extract the log probabilities and keys
+    logprobs = {key: logprob.logprob for key, logprob in logprob_dict.items()}
+
+    # Step 2: Convert log probabilities to probabilities
+    probs = {key: np.exp(logprob) if logprob != -np.inf else 0 for key, logprob in logprobs.items()}
+
+    # Step 3: Sort by probabilities in descending order
+    sorted_probs = sorted(probs.items(), key=lambda x: x[1], reverse=True)
+
+    # Step 4: Accumulate probabilities and select keys that make up 70% of total mass
+    total_prob = sum([prob for _, prob in sorted_probs])
+    cumulative_prob = 0
+    selected_keys = []
+    for key, prob in sorted_probs:
+        cumulative_prob += prob
+        selected_keys.append(key)
+        if cumulative_prob >= top_prob:
+            break
+    return selected_keys
+
+def check(outputs, all_expected, top_prob):
     results = []
     for output, expected in zip(outputs, all_expected):
         prompt = output.prompt
         generated_text = output.outputs[0].text
-        topk = output.outputs[0].logprobs[0].keys()
-        topk = list(topk)
-        result = 1 if expected in topk[:num] else 0
+        topk = get_topk(output.outputs[0].logprobs[0], top_prob)
+        result = 1 if expected in topk else 0
         results.append(result)
     return sum(results)/len(results)
 
@@ -90,13 +111,13 @@ def main():
     parser.add_argument("--dataset-split", type=str, default="train")
     parser.add_argument("--num_tokens", type=int, default=20, help="use how many tokens to detect. the larger the more accurate but also slower")
     parser.add_argument("--threshold", type=float, default=0.9, help="the ratio of tokens in topk")
-    parser.add_argument("--top_n", type=int, default=1, help="check if the expected token is one of the top n tokens")
+    parser.add_argument("--top_prob", type=float, default=0.7, help="check if the expected token is one of the top tokens that constitute the prob")
     args = parser.parse_args()
 
     ds = load_dataset(args.dataset, split=args.dataset_split)
     model_name = "meta-llama/Llama-2-13b-chat-hf"
 
-    sampling_params = SamplingParams(temperature=0.8, top_p=0.95, logprobs=10, max_tokens=1)
+    sampling_params = SamplingParams(temperature=0.8, top_p=0.95, logprobs=20, max_tokens=1)
     llm = LLM(model=model_name)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -108,7 +129,7 @@ def main():
         in_seqs, out_seqs = get_response(example, "response_a", tokenizer)
         if in_seqs is not None:
             outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
-            result = check(outputs, out_seqs, args.top_n)
+            result = check(outputs, out_seqs, args.top_prob)
             tp, fp, tn, fn = evaluate(result, args.threshold, example["model_a"])
             tps += tp
             fps += fp
@@ -117,7 +138,7 @@ def main():
         in_seqs, out_seqs = get_response(example, "response_b", tokenizer)
         if in_seqs is not None:
             outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
-            results = check(outputs, out_seqs, args.top_n)
+            results = check(outputs, out_seqs, args.top_prob)
             tp, fp, tn, fn = evaluate(result, args.threshold, example["model_b"])
             tps += tp
             fps += fp
