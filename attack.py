@@ -19,6 +19,8 @@ def find_sublist_index(main_list, sublist):
 
 
 def get_response(example, response_column, tokenizer):
+    if "null" in example[response_column]:
+        return None, None
     prompt = eval(example["prompt"])
     response = eval(example[response_column])
     if len(prompt) < 1 or len(response) < 1:
@@ -47,7 +49,7 @@ def check(outputs, all_expected, num):
         results.append(result)
     return sum(results)/len(results)
 
-def compute_stats(result, confidence, model_name):
+def evaluate(result, confidence, model_name):
     if result >= confidence and model_name == "llama-2-13b-chat":
         true_positive = 1
         false_positive = 0
@@ -69,6 +71,18 @@ def compute_stats(result, confidence, model_name):
         false_positive = 0
         false_negative = 0
     return true_positive, false_positive, true_negative, false_negative
+
+def get_stats(tps, fps, tns, fns):
+    if tps == 0:
+        tpr = 0
+    else:
+        tpr = tps/(tps+fns)
+    if tns == 0:
+        tnr = 0
+    else:
+        tnr = tns/(fps+tns)
+    print("true positive:", tpr)
+    print("true negative:", tnr)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -95,7 +109,7 @@ def main():
         if in_seqs is not None:
             outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
             result = check(outputs, out_seqs, args.top_n)
-            tp, fp, tn, fn = compute_stats(result, args.threshold, example["model_a"])
+            tp, fp, tn, fn = evaluate(result, args.threshold, example["model_a"])
             tps += tp
             fps += fp
             tns += tn
@@ -104,17 +118,15 @@ def main():
         if in_seqs is not None:
             outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
             results = check(outputs, out_seqs, args.top_n)
-            tp, fp, tn, fn = compute_stats(result, args.threshold, example["model_b"])
+            tp, fp, tn, fn = evaluate(result, args.threshold, example["model_b"])
             tps += tp
             fps += fp
             tns += tn
             fns += fn
         if i % 10 == 9:
             print(i)
-            print("true positive:", tps/(tps+fns))
-            print("true negative:", tns/(fps+tns))
-    print("true positive:", tps/(tps+fns))
-    print("true negative:", tns/(fps+tns))
+            get_stats(tps, fps, tns, fns)
+    get_stats(tps, fps, tns, fns)
 
 if __name__ == '__main__':
     main()
