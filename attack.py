@@ -65,10 +65,17 @@ def check(outputs, all_expected, top_prob):
     for output, expected in zip(outputs, all_expected):
         prompt = output.prompt
         generated_text = output.outputs[0].text
-        topk = get_topk(output.outputs[0].logprobs[0], top_prob)
+        if len(output.outputs[0].logprobs) > 0:
+            topk = get_topk(output.outputs[0].logprobs[0], top_prob)
+        else:
+            return None
         result = 1 if expected in topk else 0
         results.append(result)
-    return sum(results)/len(results)
+    if len(results) > 0:
+        result = sum(results)/len(results)
+    else:
+        result = None
+    return result
 
 def evaluate(result, confidence, model_name):
     if result >= confidence and model_name == "llama-2-13b-chat":
@@ -130,20 +137,22 @@ def main():
         if in_seqs is not None:
             outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
             result = check(outputs, out_seqs, args.top_prob)
-            tp, fp, tn, fn = evaluate(result, args.threshold, example["model_a"])
-            tps += tp
-            fps += fp
-            tns += tn
-            fns += fn
+            if result is not None:
+                tp, fp, tn, fn = evaluate(result, args.threshold, example["model_a"])
+                tps += tp
+                fps += fp
+                tns += tn
+                fns += fn
         in_seqs, out_seqs = get_response(example, "response_b", tokenizer)
         if in_seqs is not None:
             outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
             results = check(outputs, out_seqs, args.top_prob)
-            tp, fp, tn, fn = evaluate(result, args.threshold, example["model_b"])
-            tps += tp
-            fps += fp
-            tns += tn
-            fns += fn
+            if result is not None:
+                tp, fp, tn, fn = evaluate(result, args.threshold, example["model_b"])
+                tps += tp
+                fps += fp
+                tns += tn
+                fns += fn
         if i % 100 == 99:
             print(i)
             get_stats(tps, fps, tns, fns)
