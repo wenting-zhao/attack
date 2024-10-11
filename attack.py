@@ -1,6 +1,6 @@
 import argparse
 import numpy as np
-from datasets import load_dataset
+from datasets import Dataset, load_dataset
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 
@@ -148,14 +148,12 @@ def main():
                 tns += tn
                 fns += fn
                 if result >= args.threshold:
-                    print(example)
                     if example["winner_model_b"]:
                         example["winner_model_b"] = 0
                         example["winner_model_a"] = 1
                     elif example["winner_tie"]:
                         example["winner_tie"] = 0
                         example["winner_model_a"] = 1
-                    print(example)
                 else:
                     in_seqs, out_seqs = get_response(example, "response_b", tokenizer)
                     if in_seqs is not None:
@@ -178,8 +176,10 @@ def main():
         if i % 100 == 99:
             print(i)
             get_stats(tps, fps, tns, fns)
+        if i % 1000 == 999:
             name = model_map[model_name]
-            out_ds.to_json(f"{name}_manipulated.json")
+            out = Dataset.from_list(out_ds)
+            out.to_json(f"{name}_manipulated.json")
     get_stats(tps, fps, tns, fns)
 
 if __name__ == '__main__':
