@@ -3,6 +3,7 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+import sys
 
 
 def compute_elo(battles, K=4, SCALE=400, BASE=10, INIT_RATING=1000):
@@ -41,7 +42,10 @@ def get_bootstrap_result(battles, func_compute_elo, num_round):
     df = pd.DataFrame(rows)
     return df[df.median().sort_values(ascending=False).index]
 
-battles = load_dataset("lmsys/lmsys-arena-human-preference-55k", split="train")
+if sys.argv[1].endswith("json"):
+    battles = load_dataset("json", data_files=sys.argv[1], split="train")
+else:
+    battles = load_dataset(sys.argv[1], split="train")
 winners = []
 for example in battles:
     if example["winner_model_a"]:

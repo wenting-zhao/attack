@@ -77,18 +77,18 @@ def check(outputs, all_expected, top_prob):
         result = None
     return result
 
-def evaluate(result, confidence, model_name):
-    if result >= confidence and model_name == "llama-2-13b-chat":
+def evaluate(result, confidence, model_name, reference_name):
+    if result >= confidence and model_name == reference_name:
         true_positive = 1
         false_positive = 0
         true_negative = 0
         false_negative = 0
-    elif result >= confidence and model_name != "llama-2-13b-chat":
+    elif result >= confidence and model_name != reference_name:
         false_positive = 1
         true_positive = 0
         true_negative = 0
         false_negative = 0
-    elif result < confidence and model_name == "llama-2-13b-chat":
+    elif result < confidence and model_name == reference_name:
         false_negative = 1
         true_positive = 0
         false_positive = 0
@@ -112,9 +112,12 @@ def get_stats(tps, fps, tns, fns):
     print("true positive:", tpr)
     print("true negative:", tnr)
 
+model_map = {"meta-llama/Llama-2-13b-chat-hf": "llama-2-13b-chat", "meta-llama/Llama-2-7b-chat-hf": "llama-2-7b-chat", "meta-llama/Llama-2-70b-chat-hf": "llama-2-70b-chat"}
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True, help="dataset to use")
+    parser.add_argument("--model", type=str, required=True, help="model to use")
     parser.add_argument("--dataset-split", type=str, default="train")
     parser.add_argument("--num_tokens", type=int, default=20, help="use how many tokens to detect. the larger the more accurate but also slower")
     parser.add_argument("--threshold", type=float, default=0.9, help="the ratio of tokens in topk")
@@ -122,7 +125,7 @@ def main():
     args = parser.parse_args()
 
     ds = load_dataset(args.dataset, split=args.dataset_split)
-    model_name = "meta-llama/Llama-2-13b-chat-hf"
+    model_name = args.model
 
     sampling_params = SamplingParams(temperature=0.8, top_p=0.95, logprobs=20, max_tokens=1)
     llm = LLM(model=model_name)
@@ -132,30 +135,51 @@ def main():
     fps = 0
     tns = 0
     fns = 0
+    out_ds = []
     for i, example in enumerate(ds):
         in_seqs, out_seqs = get_response(example, "response_a", tokenizer)
         if in_seqs is not None:
             outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
             result = check(outputs, out_seqs, args.top_prob)
             if result is not None:
-                tp, fp, tn, fn = evaluate(result, args.threshold, example["model_a"])
+                tp, fp, tn, fn = evaluate(result, args.threshold, example["model_a"], model_map[model_name])
                 tps += tp
                 fps += fp
                 tns += tn
                 fns += fn
-        in_seqs, out_seqs = get_response(example, "response_b", tokenizer)
-        if in_seqs is not None:
-            outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
-            results = check(outputs, out_seqs, args.top_prob)
-            if result is not None:
-                tp, fp, tn, fn = evaluate(result, args.threshold, example["model_b"])
-                tps += tp
-                fps += fp
-                tns += tn
-                fns += fn
+                if result >= args.threshold:
+                    print(example)
+                    if example["winner_model_b"]:
+                        example["winner_model_b"] = 0
+                        example["winner_model_a"] = 1
+                    elif example["winner_tie"]:
+                        example["winner_tie"] = 0
+                        example["winner_model_a"] = 1
+                    print(example)
+                else:
+                    in_seqs, out_seqs = get_response(example, "response_b", tokenizer)
+                    if in_seqs is not None:
+                        outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
+                        results = check(outputs, out_seqs, args.top_prob)
+                        if result is not None:
+                            tp, fp, tn, fn = evaluate(result, args.threshold, example["model_b"], model_map[model_name])
+                            tps += tp
+                            fps += fp
+                            tns += tn
+                            fns += fn
+                            if result >= args.threshold:
+                                if example["winner_model_a"]:
+                                    example["winner_model_b"] = 1
+                                    example["winner_model_a"] = 0
+                                elif example["winner_tie"]:
+                                    example["winner_tie"] = 0
+                                    example["winner_model_b"] = 1
+        out_ds.append(example)
         if i % 100 == 99:
             print(i)
             get_stats(tps, fps, tns, fns)
+            name = model_map[model_name]
+            out_ds.to_json(f"{name}_manipulated.json")
     get_stats(tps, fps, tns, fns)
 
 if __name__ == '__main__':
