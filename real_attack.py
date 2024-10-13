@@ -5,6 +5,12 @@ import curl_commands
 import json
 import re
 import logging
+import argparse
+from datasets import Dataset, load_dataset
+import random
+import string
+
+
 
 logging.basicConfig(filename='app.log',
                     level=logging.DEBUG,
@@ -94,13 +100,13 @@ def process_curl_outputs(output):
 
     return error, completed, output_list_jsons
     
+def generate_session_hash():   #their javascript is Math.random().toString(36).substring(2))
+    first_char = random.choice(string.ascii_lowercase)
+    random_base36 = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+    return first_char + random_base36
 
 def attack(cookie, session_hash, instruction, session_step):
     # test_output = json.load(open("test_output.json"))
-
-    logging.debug(f'-----------------new session------------------')
-    logging.debug(f'cookie: {cookie}\tsession_hash: {session_hash}')
-    logging.debug(f'instruction: {instruction}')
     logging.debug(f'-----------------starting attack------------------')
 
 
@@ -199,6 +205,7 @@ def attack(cookie, session_hash, instruction, session_step):
     
         if step == 7:  ## extract model names
             #print(output_list_jsons)
+            found_model = False
             for out in output_list_jsons:
                 if out["msg"] == "process_completed":
                     print(out)
@@ -207,35 +214,76 @@ def attack(cookie, session_hash, instruction, session_step):
                     print(model_2)
                     return_json["output"]["generation_1"]["model"] = model_1
                     return_json["output"]["generation_2"]["model"] = model_2
+                    found_model = True
+            if not found_model:
+                return_json.update({"success": False, "error_reason": "no model signal found", "error_step": step})
+                return return_json
 
     return return_json
 
 
-if __name__ == '__main__':
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", type=str, required=True, help="dataset to use")
+    parser.add_argument("--dataset-split", type=str, default="train")
+    parser.add_argument("--start_idx", type=str, required=True, help="model to use")
+    parser.add_argument("--steps", type=str, default="10")
+    args = parser.parse_args()
 
-    instructions = ["when was obama born?", "who is the indian president?"]
+    ds = load_dataset(args.dataset, split=args.dataset_split)
+    ds_curr = ds.select(range(int(args.start_idx), int(args.start_idx) + int(args.steps)))
+    instructions = [{"text": x['question'], "id": x["id"]} for x in ds_curr]
+    
+    #print(questions)
+
+    step_since_last_failure = 0
+
+
+    #instructions = ["when was obama born?", "who is the indian president?"]
+
+    #step1: get cookie and credentials
+    #generate cookie once, but maybe should change this.
+    with sync_playwright() as playwright:
+        cookie = run(playwright)
+
     step_size = 1 ## TODO: always getting same model with higher step_size, debug
     #with open('output_attack.jsonl', 'a') as f:
 
     for step, instruction in enumerate(instructions):
         if step % step_size == 0:
-            #step1: get cookie and credentials
-            with sync_playwright() as playwright:
-                cookie = run(playwright)
 
             # step2: generate random session hash
-            session_hash = "ri39q984fv"
+            session_hash = generate_session_hash() #"ri39q984fv"
     
-        instruction = instructions[step]
+        instruction = instructions[step]["text"]
+        instruction_id = instructions[step]["id"]
         session_step = step % step_size
 
-        return_json = attack(cookie, session_hash, instruction, session_step)
-        print(return_json)
-        logging.debug(f'OUTPUT------------------->{return_json}')
+        logging.debug(f'-----------------new session------------------')
+        logging.debug(f'cookie: {cookie}\tsession_hash: {session_hash}')
+        logging.debug(f'instruction: {instruction}')
 
-        with open('output_attack.jsonl', 'a') as f:  #opening and closing 
-            json.dump(return_json, f)
-            f.write('\n')
-            f.close()
+        try:
+            return_json = attack(cookie, session_hash, instruction, session_step)
+            return_json["instruction_id"] = instruction_id
+            print(return_json)
+            logging.debug(f'OUTPUT------------------->{return_json}')
+
+            with open('output_attack.jsonl', 'a') as f:  #opening and closing 
+                json.dump(return_json, f)
+                f.write('\n')
+                f.close()
+        except:
+            logging.debug(f'attack failed')
+            step_since_last_failure += 1
 
         logging.debug(f'-----------------end session------------------')
+
+        if step_since_last_failure > 4:
+            logging.debug(f'exiting because of repeated failures')
+            exit()
+        time.sleep(10)
+
+if __name__ == '__main__':
+    main()
+    
