@@ -138,10 +138,14 @@ def main():
     out_ds = []
     for i, example in enumerate(ds):
         in_seqs, out_seqs = get_response(example, "response_a", tokenizer)
+        example["confidence_a"] = -1
+        example["confidence_b"] = -1
         if in_seqs is not None:
             outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
             result = check(outputs, out_seqs, args.top_prob)
+            print(result)
             if result is not None:
+                example["confidence_a"] = result
                 tp, fp, tn, fn = evaluate(result, args.threshold, example["model_a"], model_map[model_name])
                 tps += tp
                 fps += fp
@@ -158,8 +162,9 @@ def main():
                     in_seqs, out_seqs = get_response(example, "response_b", tokenizer)
                     if in_seqs is not None:
                         outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
-                        results = check(outputs, out_seqs, args.top_prob)
+                        result = check(outputs, out_seqs, args.top_prob)
                         if result is not None:
+                            example["confidence_b"] = result
                             tp, fp, tn, fn = evaluate(result, args.threshold, example["model_b"], model_map[model_name])
                             tps += tp
                             fps += fp
