@@ -112,7 +112,7 @@ def get_stats(tps, fps, tns, fns):
     print("true positive:", tpr)
     print("true negative:", tnr)
 
-model_map = {"meta-llama/Llama-2-13b-chat-hf": "llama-2-13b-chat", "meta-llama/Llama-2-7b-chat-hf": "llama-2-7b-chat", "meta-llama/Llama-2-70b-chat-hf": "llama-2-70b-chat"}
+model_map = {"meta-llama/Llama-2-13b-chat-hf": "llama-2-13b-chat", "meta-llama/Llama-2-7b-chat-hf": "llama-2-7b-chat", "meta-llama/Llama-2-70b-chat-hf": "llama-2-70b-chat", "mistralai/Mixtral-8x7B-Instruct-v0.1": "mixtral-8x7b-instruct-v0.1", "lmsys/vicuna-33b-v1.3": "vicuna-33b", "lmsys/vicuna-13b-v1.5": "vicuna-13b", "HuggingFaceH4/zephyr-7b-beta": "zephyr-7b-beta", "mistralai/Mistral-7B-Instruct-v0.2": "mistral-7b-instruct-v0.2"}
 
 def main():
     parser = argparse.ArgumentParser()
