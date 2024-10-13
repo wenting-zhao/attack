@@ -7,9 +7,22 @@ def run(playwright):
         user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     )
     page = context.new_page()
-    context.clear_cookies()
-
     page.goto("https://lmarena.ai/")
+
+    time.sleep(2)
+
+    cookies = context.cookies()
+
+    # Print the cookies
+    cookie_list = []
+    for cookie in cookies:
+        print(f'{cookie["name"]}: {cookie["value"]}')
+        cookie_list.append(f'{cookie["name"]}={cookie["value"]}')
+
+    # Join cookies into a single string
+    cookies_str = ' '.join(cookie_list)
+    print(cookies_str)
+
     page.screenshot(path="dialog1.png")
     time.sleep(5)
     page.screenshot(path="dialog2.png")
