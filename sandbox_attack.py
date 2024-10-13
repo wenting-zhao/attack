@@ -143,7 +143,6 @@ def main():
         if in_seqs is not None:
             outputs = llm.generate(in_seqs[:args.num_tokens], sampling_params)
             result = check(outputs, out_seqs, args.top_prob)
-            print(result)
             if result is not None:
                 example["confidence_a"] = result
                 tp, fp, tn, fn = evaluate(result, args.threshold, example["model_a"], model_map[model_name])
