@@ -9,10 +9,10 @@ import argparse
 from datasets import Dataset, load_dataset
 import random
 import string
+import datetime
 
-
-
-logging.basicConfig(filename='app.log',
+current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+logging.basicConfig(filename=f'logs/app_{current_time}.log',
                     level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -149,7 +149,7 @@ def attack(cookie, session_hash, instruction, session_step):
 
         if step == 7:
             command = command.replace("{{VOTE}}", votes_dict[vote])  #only i = 7 has this
-        process = subprocess.run(command, shell=True, capture_output=True, text=True)
+        process = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=180)
         logging.debug(process.stdout)
 
         if process.returncode != 0:
@@ -159,7 +159,7 @@ def attack(cookie, session_hash, instruction, session_step):
             return return_json
         
         time.sleep(15)
-        process = subprocess.run(command_data, shell=True, capture_output=True, text=True)
+        process = subprocess.run(command_data, shell=True, capture_output=True, text=True, timeout=180)
         logging.debug(process.stdout)
         error, _, output_list_jsons = process_curl_outputs(process.stdout)
         if error:
@@ -234,8 +234,8 @@ def main():
     ds_curr = ds.select(range(int(args.start_idx), int(args.start_idx) + int(args.steps)))
     instructions = [{"text": x['question'], "id": x["id"]} for x in ds_curr]
     
-    #print(questions)
-
+    
+    output_filename = f'outputs/output_attack_{args.start_idx}.jsonl'
     step_since_last_failure = 0
 
 
@@ -250,8 +250,8 @@ def main():
     #with open('output_attack.jsonl', 'a') as f:
 
     for step, instruction in enumerate(instructions):
+        print(step)
         if step % step_size == 0:
-
             # step2: generate random session hash
             session_hash = generate_session_hash() #"ri39q984fv"
     
@@ -269,7 +269,7 @@ def main():
             print(return_json)
             logging.debug(f'OUTPUT------------------->{return_json}')
 
-            with open('output_attack.jsonl', 'a') as f:  #opening and closing 
+            with open(output_filename, 'a') as f:  #opening and closing 
                 json.dump(return_json, f)
                 f.write('\n')
                 f.close()
@@ -279,7 +279,7 @@ def main():
 
         logging.debug(f'-----------------end session------------------')
 
-        if step_since_last_failure > 4:
+        if step_since_last_failure > 2:
             logging.debug(f'exiting because of repeated failures')
             exit()
         time.sleep(10)
