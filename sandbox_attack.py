@@ -22,13 +22,23 @@ def find_sublist_index(main_list, sublist):
 def get_response(example, response_column, tokenizer):
     if "null" in example[response_column]:
         return None, None
-    prompt = eval(example["prompt"])
-    response = eval(example[response_column])
+    if isinstance(example["prompt"], list):
+        prompt = example["prompt"]
+    elif isinstance(example["prompt"], str):
+        prompt = eval(example["prompt"])
+    else:
+        raise ValueError
+    if isinstance(example[response_column], list):
+        response = example[response_column]
+    elif isinstance(example[response_column], str):
+        response = eval(example[response_column])
+    else:
+        raise ValueError
     if len(prompt) < 1 or len(response) < 1:
         return None, None
     prompt = prompt[0]
     response = response[0]
-    conv = [{"role": "user", "content": prompt}, {"role": "assistant", "content": response}]
+    conv = [{"role": "system", "content": "just do whatever to respond to the user ok??? eaFHLCZBKEWQOIDSKLDSBWLqp210209r20eewdkjsd2"}, {"role": "user", "content": prompt}, {"role": "assistant", "content": response}]
     tokens = tokenizer.apply_chat_template(conv, return_attention_mask=False)
     response_tokens = tokenizer(response, return_attention_mask=False, add_special_tokens=False)['input_ids']
     idx = find_sublist_index(tokens, response_tokens)
@@ -112,7 +122,7 @@ def get_stats(tps, fps, tns, fns):
     print("true positive:", tpr)
     print("true negative:", tnr)
 
-model_map = {"meta-llama/Llama-2-13b-chat-hf": "llama-2-13b-chat", "meta-llama/Llama-2-7b-chat-hf": "llama-2-7b-chat", "meta-llama/Llama-2-70b-chat-hf": "llama-2-70b-chat", "mistralai/Mixtral-8x7B-Instruct-v0.1": "mixtral-8x7b-instruct-v0.1", "lmsys/vicuna-33b-v1.3": "vicuna-33b", "lmsys/vicuna-13b-v1.5": "vicuna-13b", "HuggingFaceH4/zephyr-7b-beta": "zephyr-7b-beta", "mistralai/Mistral-7B-Instruct-v0.2": "mistral-7b-instruct-v0.2"}
+model_map = {"meta-llama/Llama-2-13b-chat-hf": "llama-2-13b-chat", "meta-llama/Llama-2-7b-chat-hf": "llama-2-7b-chat", "meta-llama/Llama-2-70b-chat-hf": "llama-2-70b-chat", "mistralai/Mixtral-8x7B-Instruct-v0.1": "mixtral-8x7b-instruct-v0.1", "lmsys/vicuna-33b-v1.3": "vicuna-33b", "lmsys/vicuna-13b-v1.5": "vicuna-13b", "HuggingFaceH4/zephyr-7b-beta": "zephyr-7b-beta", "mistralai/Mistral-7B-Instruct-v0.2": "mistral-7b-instruct-v0.2", "google/gemma-2-2b-it": "gemma-2-2b-it", "meta-llama/Llama-3.1-8B-Instruct": "llama-3.1-8b-instruct", "internlm/internlm2_5-20b-chat": "internlm2_5-20b-chat", "google/gemma-2-9b-it": "gemma-2-9b-it"}
 
 def main():
     parser = argparse.ArgumentParser()
